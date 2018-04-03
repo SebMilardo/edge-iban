@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
     static int destUdpServerPort;
     static String destUdpServerAddress;
     static BluetoothAdapter bluetoothAdapter;
-    static String IBAN_MAC = "7C:D1:C3:E2:B0:66";
+    static String IbanMac;
     static Set<BluetoothDevice> btDevices;
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
@@ -76,8 +76,8 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
         Log.e(TAG, "On Start...");
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        UdpServerPort = Integer.parseInt(prefs.getString("server_port", "4444"));
-
+        UdpServerPort = Integer.parseInt(prefs.getString("server_port", "4445"));
+        IbanMac = prefs.getString("iban_mac","00:00:00:00:00:00");
         scrollView = findViewById(R.id.scroller);
         textViewInfoRx = findViewById(R.id.info_rx);
         textViewInfoTx = findViewById(R.id.info_tx);
@@ -95,7 +95,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (rfCommThread == null) {
-            rfCommThread = new RFCommThread(IBAN_MAC);
+            rfCommThread = new RFCommThread(IbanMac);
             rfCommThread.start();
             Log.i(TAG, "RFCOMM Thread Started");
         }
@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (rfCommThread == null) {
-            rfCommThread = new RFCommThread(IBAN_MAC);
+            rfCommThread = new RFCommThread(IbanMac);
             rfCommThread.start();
             Log.i(TAG, "RFCOMM Thread Started");
         }
