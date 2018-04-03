@@ -35,33 +35,46 @@ import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
-    private final static String TAG = MainActivity.class.getSimpleName();
-    static int UdpServerPort;
-    static int destUdpServerPort;
-    static String destUdpServerAddress;
-    static BluetoothAdapter bluetoothAdapter;
-    static String IbanMac;
-    static Set<BluetoothDevice> btDevices;
+    private final static String TAG = "EdgeIban";
+    private static int serverPort;
+    private final static String serverPortDefault = "4445";
+    private static int destPort;
+    private static String destAddress;
+    private static BluetoothAdapter btAdapter;
+    private static String ibanMac;
+    private final static String ibanMacDefault = "00:00:00:00:00:00";
+    private static Set<BluetoothDevice> btDevices;
+    private final static UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
+
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                 BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 Log.i(TAG, "Found device: "+ device.getAddress());
-                btDevices.add(device);
+                if (!btDevices.contains(device)) {
+                    btDevices.add(device);
+                    if (device.getAddress().equals(ibanMac)) {
+                        rfCommThread = new RFCommThread(ibanMac);
+                        rfCommThread.start();
+                        Log.i(TAG, "RFCOMM Thread Started");
+                    }
+                }
             }
         }
     };
-    TextView textViewState, textViewPrompt, textViewInfoTx, textViewInfoRx;
-    ScrollView scrollView;
-    UdpServerThread udpServerThread;
-    RFCommThread rfCommThread;
-    SharedPreferences prefs;
+
+    private TextView textViewState, textViewPrompt, textViewInfoTx, textViewInfoRx;
+    private ScrollView scrollView;
+
+    private UdpServerThread udpThread;
+    private RFCommThread rfCommThread;
+    private SharedPreferences prefs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        btAdapter = BluetoothAdapter.getDefaultAdapter();
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -76,8 +89,8 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
         Log.e(TAG, "On Start...");
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        UdpServerPort = Integer.parseInt(prefs.getString("server_port", "4445"));
-        IbanMac = prefs.getString("iban_mac","00:00:00:00:00:00");
+        serverPort = Integer.parseInt(prefs.getString("server_port", serverPortDefault));
+        ibanMac = prefs.getString("iban_mac",ibanMacDefault);
         scrollView = findViewById(R.id.scroller);
         textViewInfoRx = findViewById(R.id.info_rx);
         textViewInfoTx = findViewById(R.id.info_tx);
@@ -88,16 +101,20 @@ public class MainActivity extends AppCompatActivity {
 
         setPreferences(Destination.EDGE);
 
-        if (udpServerThread == null) {
-            udpServerThread = new UdpServerThread(UdpServerPort);
-            udpServerThread.start();
+        if (udpThread == null) {
+            udpThread = new UdpServerThread(serverPort);
+            udpThread.start();
             Log.i(TAG, "UDP Server Started");
         }
 
         if (rfCommThread == null) {
-            rfCommThread = new RFCommThread(IbanMac);
-            rfCommThread.start();
-            Log.i(TAG, "RFCOMM Thread Started");
+            BluetoothDevice dev = getDevice(ibanMac);
+            if (dev == null) {
+                btAdapter.startDiscovery();
+            } else {
+                rfCommThread = new RFCommThread(ibanMac);
+                rfCommThread.start();
+            }
         }
     }
 
@@ -107,18 +124,22 @@ public class MainActivity extends AppCompatActivity {
         textViewInfoRx.setText(getIpAddressAndPortRx());
         textViewInfoTx.setText(getIpAddressAndPortTx());
 
-        if (udpServerThread != null) {
-            udpServerThread.setRunning(true);
+        if (udpThread != null) {
+            udpThread.setRunning(true);
         } else {
-            udpServerThread = new UdpServerThread(UdpServerPort);
-            udpServerThread.start();
+            udpThread = new UdpServerThread(serverPort);
+            udpThread.start();
             Log.i(TAG, "UDP Server Starting");
         }
 
         if (rfCommThread == null) {
-            rfCommThread = new RFCommThread(IbanMac);
-            rfCommThread.start();
-            Log.i(TAG, "RFCOMM Thread Started");
+            BluetoothDevice dev = getDevice(ibanMac);
+            if (dev == null) {
+                btAdapter.startDiscovery();
+            } else {
+                rfCommThread = new RFCommThread(ibanMac);
+                rfCommThread.start();
+            }
         }
     }
 
@@ -126,11 +147,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.e(TAG, "On Pause...");
-        if (udpServerThread != null) {
-            udpServerThread.setRunning(false);
-            udpServerThread.interrupt();
-            udpServerThread.close();
-            udpServerThread = null;
+        if (udpThread != null) {
+            udpThread.setRunning(false);
+            udpThread.interrupt();
+            udpThread.close();
+            udpThread = null;
         }
 
         if (rfCommThread != null) {
@@ -144,11 +165,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         super.onStop();
         Log.e(TAG, "On Stop...");
-        if (udpServerThread != null) {
-            udpServerThread.setRunning(false);
-            udpServerThread.interrupt();
-            udpServerThread.socket.close();
-            udpServerThread = null;
+        if (udpThread != null) {
+            udpThread.setRunning(false);
+            udpThread.interrupt();
+            udpThread.close();
+            udpThread = null;
         }
     }
 
@@ -209,13 +230,13 @@ public class MainActivity extends AppCompatActivity {
     private void setPreferences(Destination dest) {
         switch (dest) {
             case EDGE:
-                destUdpServerAddress = prefs.getString("edge_address", "localhost");
-                destUdpServerPort = Integer.parseInt(prefs.getString("edge_port", "4445"));
+                destAddress = prefs.getString("edge_address", "localhost");
+                destPort = Integer.parseInt(prefs.getString("edge_port", "4445"));
                 Toast.makeText(this, "Sending to the Edge", Toast.LENGTH_SHORT).show();
                 break;
             default:
-                destUdpServerAddress = prefs.getString("cloud_address", "localhost");
-                destUdpServerPort = Integer.parseInt(prefs.getString("cloud_port", "4445"));
+                destAddress = prefs.getString("cloud_address", "localhost");
+                destPort = Integer.parseInt(prefs.getString("cloud_port", "4445"));
                 Toast.makeText(this, "Sending to the Cloud", Toast.LENGTH_SHORT).show();
                 break;
         }
@@ -223,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String getIpAddressAndPortTx() {
-        return "Sending to: " + destUdpServerAddress + ":" + destUdpServerPort;
+        return "Sending to: " + destAddress + ":" + destPort;
     }
 
     private String getIpAddressAndPortRx() {
@@ -240,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
                     InetAddress inetAddress = enumInetAddress.nextElement();
 
                     if (inetAddress.isSiteLocalAddress()) {
-                        ip += "\nListening at: " + inetAddress.getHostAddress() + ":" + UdpServerPort;
+                        ip += "\nListening at: " + inetAddress.getHostAddress() + ":" + serverPort;
                     }
 
                 }
@@ -270,13 +291,13 @@ public class MainActivity extends AppCompatActivity {
         Set<BluetoothDevice> devs = new HashSet<>();
         int REQUEST_ENABLE_BT = 1;
 
-        if (bluetoothAdapter != null) {
-            if (!bluetoothAdapter.isEnabled()) {
+        if (btAdapter != null) {
+            if (!btAdapter.isEnabled()) {
                 Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                 startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
             }
 
-            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+            Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
 
             if (pairedDevices.size() > 0) {
                 // There are paired devices. Get the name and address of each paired device.
@@ -296,8 +317,8 @@ public class MainActivity extends AppCompatActivity {
 
     private class UdpServerThread extends Thread {
 
-        int serverPort;
-        DatagramSocket socket;
+        private int serverPort;
+        private DatagramSocket socket;
         boolean running;
 
         public UdpServerThread(int serverPort) {
@@ -327,23 +348,22 @@ public class MainActivity extends AppCompatActivity {
 
                     // receive request
                     DatagramPacket packet = new DatagramPacket(buf, buf.length);
-                    socket.receive(packet);     //this code block the program flow
+                    socket.receive(packet);
 
                     // send the response to the client at "address" and "port"
                     InetAddress address = packet.getAddress();
                     int port = packet.getPort();
 
-                    updatePrompt("[" + Calendar.getInstance().getTimeInMillis() + "] Got " + packet.getLength() + "Bytes from: " + address + ":" + port + "\n");
+                    updatePrompt("[" + Calendar.getInstance().getTimeInMillis() + "] Got " +
+                            packet.getLength() + "Bytes from: " + address + ":" + port + "\n");
                     packet = new DatagramPacket(packet.getData(), packet.getLength(),
-                            InetAddress.getByName(destUdpServerAddress), destUdpServerPort);
+                            InetAddress.getByName(destAddress), destPort);
                     rfCommThread.write(packet.getData(), packet.getLength());
                     socket.send(packet);
                 }
 
                 Log.e(TAG, "UDP Server ended");
 
-            } catch (SocketException e) {
-                e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
@@ -367,7 +387,7 @@ public class MainActivity extends AppCompatActivity {
             BluetoothDevice dev = getDevice(mac);
             if (dev != null) {
                 try {
-                    socket = dev.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"));
+                    socket = dev.createRfcommSocketToServiceRecord(uuid);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -375,7 +395,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void run() {
-            bluetoothAdapter.cancelDiscovery();
+            btAdapter.cancelDiscovery();
 
             try {
                 Log.i(TAG, "Connecting...");
