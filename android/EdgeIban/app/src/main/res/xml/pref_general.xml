@@ -51,7 +51,7 @@
     <EditTextPreference
         android:defaultValue="00:00:00:00:00:00"
         android:inputType="text"
-        android:key="iban_address"
+        android:key="iban_mac"
         android:maxLines="1"
         android:selectAllOnFocus="true"
         android:singleLine="true"
