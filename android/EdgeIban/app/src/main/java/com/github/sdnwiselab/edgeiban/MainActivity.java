@@ -22,6 +22,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -50,12 +52,12 @@ public class MainActivity extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                Log.i(TAG, "Found device: "+ device.getAddress());
-                if (!btDevices.contains(device)) {
-                    btDevices.add(device);
-                    if (device.getAddress().equals(ibanMac)) {
-                        rfCommThread = new RFCommThread(ibanMac);
+                BluetoothDevice dev = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                Log.i(TAG, "Found device: "+ dev.getAddress());
+                if (!btDevices.contains(dev)) {
+                    btDevices.add(dev);
+                    if (dev.getAddress().equals(ibanMac)) {
+                        rfCommThread = new RFCommThread(dev);
                         rfCommThread.start();
                         Log.i(TAG, "RFCOMM Thread Started");
                     }
@@ -112,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
             if (dev == null) {
                 btAdapter.startDiscovery();
             } else {
-                rfCommThread = new RFCommThread(ibanMac);
+                rfCommThread = new RFCommThread(dev);
                 rfCommThread.start();
             }
         }
@@ -137,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
             if (dev == null) {
                 btAdapter.startDiscovery();
             } else {
-                rfCommThread = new RFCommThread(ibanMac);
+                rfCommThread = new RFCommThread(dev);
                 rfCommThread.start();
             }
         }
@@ -261,7 +263,7 @@ public class MainActivity extends AppCompatActivity {
                     InetAddress inetAddress = enumInetAddress.nextElement();
 
                     if (inetAddress.isSiteLocalAddress()) {
-                        ip += "\nListening at: " + inetAddress.getHostAddress() + ":" + serverPort;
+                        ip += "Listening at: " + inetAddress.getHostAddress() + ":" + serverPort;
                     }
 
                 }
@@ -272,6 +274,8 @@ public class MainActivity extends AppCompatActivity {
            Log.e(TAG,"Error: ", e);
         }
 
+        if (ip.equals(""))
+            ip = "Not connected";
         return ip;
     }
 
@@ -356,21 +360,26 @@ public class MainActivity extends AppCompatActivity {
 
                     updatePrompt("[" + Calendar.getInstance().getTimeInMillis() + "] Got " +
                             packet.getLength() + "Bytes from: " + address + ":" + port + "\n");
-                    packet = new DatagramPacket(packet.getData(), packet.getLength(),
-                            InetAddress.getByName(destAddress), destPort);
                     rfCommThread.write(packet.getData(), packet.getLength());
-                    socket.send(packet);
                 }
 
                 Log.e(TAG, "UDP Server ended");
 
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.e(TAG, "Closing socket...");
             } finally {
                 if (socket != null) {
                     socket.close();
                     Log.e(TAG, "socket.close()");
                 }
+            }
+        }
+
+        public void send(DatagramPacket p){
+            try {
+                socket.send(p);
+            } catch (IOException e) {
+                Log.e(TAG,"Error: ", e);
             }
         }
 
@@ -381,26 +390,52 @@ public class MainActivity extends AppCompatActivity {
 
 
     private class RFCommThread extends Thread {
-        BluetoothSocket socket;
+        private final BluetoothSocket socket;
+        private byte[] mmBuffer; // mmBuffer store for the stream
 
-        public RFCommThread(String mac) {
-            BluetoothDevice dev = getDevice(mac);
+
+        boolean running;
+
+        public RFCommThread(BluetoothDevice dev) {
+            BluetoothSocket tmp = null;
             if (dev != null) {
                 try {
-                    socket = dev.createRfcommSocketToServiceRecord(uuid);
+                    tmp = dev.createRfcommSocketToServiceRecord(uuid);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    Log.e(TAG,"Null device");
                 }
             }
+            socket = tmp;
         }
 
+        public void setRunning(boolean running) {
+            this.running = running;
+            Log.e(TAG, "Running " + running);
+        }
+
+        @Override
         public void run() {
+            mmBuffer = new byte[1024];
+            int numBytes; // bytes returned from read()
+
+            running = true;
             btAdapter.cancelDiscovery();
 
             try {
                 Log.i(TAG, "Connecting...");
                 socket.connect();
                 Log.i(TAG, "Connected...");
+
+                InputStream is = socket.getInputStream();
+
+                while (running){
+                    numBytes = is.read(mmBuffer);
+                    updatePrompt("[" + Calendar.getInstance().getTimeInMillis() + "] Got " +
+                            numBytes + " Bytes from: " + ibanMac + "\n");
+                    DatagramPacket packet = new DatagramPacket(mmBuffer, numBytes,
+                            InetAddress.getByName(destAddress), destPort);
+                    udpThread.send(packet);
+                }
             } catch (IOException connectException) {
                 try {
                     socket.close();
@@ -415,7 +450,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 socket.getOutputStream().write(data,0,len);
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.e(TAG,"Error: ", e);
             }
 
         }
