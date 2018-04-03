@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
         Log.e(TAG, "On Start...");
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         serverPort = Integer.parseInt(prefs.getString("server_port", serverPortDefault));
-        ibanMac = prefs.getString("iban_mac",ibanMacDefault);
+        ibanMac = prefs.getString("iban_mac",ibanMacDefault).toUpperCase();
         scrollView = findViewById(R.id.scroller);
         textViewInfoRx = findViewById(R.id.info_rx);
         textViewInfoTx = findViewById(R.id.info_tx);
