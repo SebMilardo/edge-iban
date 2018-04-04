@@ -19,7 +19,7 @@
         android:maxLines="1"
         android:selectAllOnFocus="true"
         android:singleLine="true"
-        android:title="Edge UDP port" />
+        android:title="Edge TCP port" />
 
     <EditTextPreference
         android:defaultValue="10.0.0.1"
@@ -37,16 +37,7 @@
         android:maxLines="1"
         android:selectAllOnFocus="true"
         android:singleLine="true"
-        android:title="Cloud UDP port" />
-
-    <EditTextPreference
-        android:defaultValue="4445"
-        android:inputType="number"
-        android:key="server_port"
-        android:maxLines="1"
-        android:selectAllOnFocus="true"
-        android:singleLine="true"
-        android:title="Listening UDP port" />
+        android:title="Cloud TCP port" />
 
     <EditTextPreference
         android:defaultValue="00:00:00:00:00:00"

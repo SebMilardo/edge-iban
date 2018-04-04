@@ -169,7 +169,6 @@ public class SettingsActivity extends AppCompatPreferenceActivity {
             bindPreferenceSummaryToValue(findPreference("cloud_address"));
             bindPreferenceSummaryToValue(findPreference("edge_port"));
             bindPreferenceSummaryToValue(findPreference("edge_address"));
-            bindPreferenceSummaryToValue(findPreference("server_port"));
             bindPreferenceSummaryToValue(findPreference("iban_mac"));
         }
 

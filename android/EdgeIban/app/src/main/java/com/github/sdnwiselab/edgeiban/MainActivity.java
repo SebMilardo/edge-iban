@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
@@ -16,18 +17,22 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.RadioButton;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.Socket;
 import java.net.SocketException;
 import java.util.Calendar;
 import java.util.Enumeration;
@@ -38,8 +43,6 @@ import java.util.UUID;
 public class MainActivity extends AppCompatActivity {
 
     private final static String TAG = "EdgeIban";
-    private static int serverPort;
-    private final static String serverPortDefault = "4445";
     private static int destPort;
     private static String destAddress;
     private static BluetoothAdapter btAdapter;
@@ -47,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private final static String ibanMacDefault = "00:00:00:00:00:00";
     private static Set<BluetoothDevice> btDevices;
     private final static UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
+    TcpClient mTcpClient;
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
@@ -69,7 +73,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView textViewState, textViewPrompt, textViewInfoTx, textViewInfoRx;
     private ScrollView scrollView;
 
-    private UdpServerThread udpThread;
     private RFCommThread rfCommThread;
     private SharedPreferences prefs;
 
@@ -91,47 +94,23 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
         Log.e(TAG, "On Start...");
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        serverPort = Integer.parseInt(prefs.getString("server_port", serverPortDefault));
-        ibanMac = prefs.getString("iban_mac",ibanMacDefault).toUpperCase();
         scrollView = findViewById(R.id.scroller);
         textViewInfoRx = findViewById(R.id.info_rx);
         textViewInfoTx = findViewById(R.id.info_tx);
         textViewState = findViewById(R.id.state);
         textViewPrompt = findViewById(R.id.prompt);
         textViewInfoRx.setText(getIpAddressAndPortRx());
-        textViewInfoTx.setText(getIpAddressAndPortTx());
-
-        setPreferences(Destination.EDGE);
-
-        if (udpThread == null) {
-            udpThread = new UdpServerThread(serverPort);
-            udpThread.start();
-            Log.i(TAG, "UDP Server Started");
-        }
-
-        if (rfCommThread == null) {
-            BluetoothDevice dev = getDevice(ibanMac);
-            if (dev == null) {
-                btAdapter.startDiscovery();
-            } else {
-                rfCommThread = new RFCommThread(dev);
-                rfCommThread.start();
-            }
-        }
+        textViewInfoTx.setText("Select a destination");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        textViewInfoRx.setText(getIpAddressAndPortRx());
         textViewInfoTx.setText(getIpAddressAndPortTx());
+        textViewInfoRx.setText(getIpAddressAndPortRx());
 
-        if (udpThread != null) {
-            udpThread.setRunning(true);
-        } else {
-            udpThread = new UdpServerThread(serverPort);
-            udpThread.start();
-            Log.i(TAG, "UDP Server Starting");
+        if (mTcpClient != null) {
+            mTcpClient.stopClient();
         }
 
         if (rfCommThread == null) {
@@ -149,11 +128,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.e(TAG, "On Pause...");
-        if (udpThread != null) {
-            udpThread.setRunning(false);
-            udpThread.interrupt();
-            udpThread.close();
-            udpThread = null;
+        if (mTcpClient != null) {
+            mTcpClient.stopClient();
         }
 
         if (rfCommThread != null) {
@@ -167,11 +143,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         super.onStop();
         Log.e(TAG, "On Stop...");
-        if (udpThread != null) {
-            udpThread.setRunning(false);
-            udpThread.interrupt();
-            udpThread.close();
-            udpThread = null;
+        if (mTcpClient != null) {
+            mTcpClient.stopClient();
         }
     }
 
@@ -213,41 +186,6 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public void onRadioButtonClicked(View view) {
-        boolean checked = ((RadioButton) view).isChecked();
-
-        switch (view.getId()) {
-            case R.id.radio_edge:
-                if (checked)
-                    setPreferences(Destination.EDGE);
-                break;
-            case R.id.radio_cloud:
-                if (checked)
-                    setPreferences(Destination.CLOUD);
-                break;
-        }
-
-    }
-
-    private void setPreferences(Destination dest) {
-        switch (dest) {
-            case EDGE:
-                destAddress = prefs.getString("edge_address", "localhost");
-                destPort = Integer.parseInt(prefs.getString("edge_port", "4445"));
-                Toast.makeText(this, "Sending to the Edge", Toast.LENGTH_SHORT).show();
-                break;
-            default:
-                destAddress = prefs.getString("cloud_address", "localhost");
-                destPort = Integer.parseInt(prefs.getString("cloud_port", "4445"));
-                Toast.makeText(this, "Sending to the Cloud", Toast.LENGTH_SHORT).show();
-                break;
-        }
-        textViewInfoTx.setText(getIpAddressAndPortTx());
-    }
-
-    private String getIpAddressAndPortTx() {
-        return "Sending to: " + destAddress + ":" + destPort;
-    }
 
     private String getIpAddressAndPortRx() {
         String ip = "";
@@ -263,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
                     InetAddress inetAddress = enumInetAddress.nextElement();
 
                     if (inetAddress.isSiteLocalAddress()) {
-                        ip += "Listening at: " + inetAddress.getHostAddress() + ":" + serverPort;
+                        ip += "My IP: " + inetAddress.getHostAddress() + "\n";
                     }
 
                 }
@@ -271,13 +209,69 @@ public class MainActivity extends AppCompatActivity {
             }
 
         } catch (SocketException e) {
-           Log.e(TAG,"Error: ", e);
+            Log.e(TAG, "Error: ", e);
         }
-
-        if (ip.equals(""))
-            ip = "Not connected";
         return ip;
     }
+
+    /** Called when the user touches the button */
+    public void connectToCloud(View view) {
+        destAddress = prefs.getString("cloud_address", "localhost");
+        destPort = Integer.parseInt(prefs.getString("cloud_port", "4445"));
+        textViewInfoTx.setText(getIpAddressAndPortTx());
+        if (mTcpClient != null) {
+            mTcpClient.stopClient();
+        }
+        new ConnectTask().execute("");
+        updateState("Connected to Cloud");
+    }
+
+    /** Called when the user touches the button */
+    public void connectToEdge(View view) {
+        destAddress = prefs.getString("edge_address", "localhost");
+        destPort = Integer.parseInt(prefs.getString("edge_port", "4445"));
+        textViewInfoTx.setText(getIpAddressAndPortTx());
+        if (mTcpClient != null) {
+            mTcpClient.stopClient();
+        }
+        new ConnectTask().execute("");
+        updateState("Connected to Edge");
+    }
+
+    /** Called when the user touches the button */
+    public void connectToBt(View view) {
+        ibanMac = prefs.getString("iban_mac",ibanMacDefault).toUpperCase();
+        if (rfCommThread == null) {
+            BluetoothDevice dev = getDevice(ibanMac);
+            if (dev == null) {
+                btAdapter.startDiscovery();
+            } else {
+                rfCommThread = new RFCommThread(dev);
+                rfCommThread.start();
+            }
+        }
+    }
+
+    /** Called when the user touches the button */
+    public void sendToIban(View view) {
+        // Do something in response to button click
+        String data = Long.toString(System.nanoTime());
+        rfCommThread.write(data.getBytes(),data.length());
+    }
+
+    /** Called when the user touches the button */
+    public void sendToNetwork(View view) {
+        // Do something in response to button click
+        if (mTcpClient != null) {
+            mTcpClient.sendMessage(Long.toString(System.nanoTime()));
+        }
+    }
+
+
+    private String getIpAddressAndPortTx() {
+        return "Sending to: " + destAddress + ":" + destPort;
+    }
+
 
     private BluetoothDevice getDevice(String mac) {
         if (btDevices.size() > 0) {
@@ -314,81 +308,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    enum Destination {
-        CLOUD,
-        EDGE
-    }
-
-    private class UdpServerThread extends Thread {
-
-        private int serverPort;
-        private DatagramSocket socket;
-        boolean running;
-
-        public UdpServerThread(int serverPort) {
-            super();
-            this.serverPort = serverPort;
-        }
-
-        public void setRunning(boolean running) {
-            this.running = running;
-            Log.e(TAG, "Running " + running);
-        }
-
-        @Override
-        public void run() {
-
-            running = true;
-
-            try {
-                updateState("Starting UDP Server");
-                socket = new DatagramSocket(serverPort);
-
-                updateState("UDP Server is running");
-                Log.e(TAG, "UDP Server is running");
-
-                while (running) {
-                    byte[] buf = new byte[3000];
-
-                    // receive request
-                    DatagramPacket packet = new DatagramPacket(buf, buf.length);
-                    socket.receive(packet);
-
-                    // send the response to the client at "address" and "port"
-                    InetAddress address = packet.getAddress();
-                    int port = packet.getPort();
-
-                    updatePrompt("[" + Calendar.getInstance().getTimeInMillis() + "] Got " +
-                            packet.getLength() + "Bytes from: " + address + ":" + port + "\n");
-                    rfCommThread.write(packet.getData(), packet.getLength());
-                }
-
-                Log.e(TAG, "UDP Server ended");
-
-            } catch (IOException e) {
-                Log.e(TAG, "Closing socket...");
-            } finally {
-                if (socket != null) {
-                    socket.close();
-                    Log.e(TAG, "socket.close()");
-                }
-            }
-        }
-
-        public void send(DatagramPacket p){
-            try {
-                socket.send(p);
-            } catch (IOException e) {
-                Log.e(TAG,"Error: ", e);
-            }
-        }
-
-        public void close(){
-            socket.close();
-        }
-    }
-
-
     private class RFCommThread extends Thread {
         private final BluetoothSocket socket;
         private byte[] mmBuffer; // mmBuffer store for the stream
@@ -422,27 +341,25 @@ public class MainActivity extends AppCompatActivity {
             btAdapter.cancelDiscovery();
 
             try {
-                Log.i(TAG, "Connecting...");
                 socket.connect();
-                Log.i(TAG, "Connected...");
+                MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Conneted to " + ibanMac, Toast.LENGTH_SHORT).show());
 
                 InputStream is = socket.getInputStream();
 
-                while (running){
+                while (true){
                     numBytes = is.read(mmBuffer);
-                    updatePrompt("[" + Calendar.getInstance().getTimeInMillis() + "] Got " +
-                            numBytes + " Bytes from: " + ibanMac + "\n");
-                    DatagramPacket packet = new DatagramPacket(mmBuffer, numBytes,
-                            InetAddress.getByName(destAddress), destPort);
-                    udpThread.send(packet);
+                    long started =  Long.parseLong(new String(mmBuffer,0,numBytes));
+                    long arrived = System.nanoTime();
+                    updatePrompt("[BT]: " + ((arrived - started)/1000000000.0) + "s \n");
                 }
-            } catch (IOException connectException) {
+            } catch (Exception e) {
                 try {
+                    Log.e(TAG, "Error:", e);
                     socket.close();
-                } catch (IOException closeException) {
-                    Log.e(TAG, "Could not close the client socket", closeException);
+                } catch (IOException ex) {
+                    Log.e(TAG, "Could not close the client socket", ex);
                 }
-                return;
+
             }
         }
 
@@ -464,4 +381,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    public class ConnectTask extends AsyncTask<String, String, TcpClient> {
+
+        @Override
+        protected TcpClient doInBackground(String... message) {
+            mTcpClient = new TcpClient(message1 -> {publishProgress(message1);},destAddress,destPort);
+            mTcpClient.run();
+            return null;
+        }
+
+        @Override
+        protected void onProgressUpdate(String... values) {
+            super.onProgressUpdate(values);
+            if (values[0].length()>0){
+                updatePrompt("[IP]: " + values[0] + "s \n");
+            }
+        }
+    }
 }

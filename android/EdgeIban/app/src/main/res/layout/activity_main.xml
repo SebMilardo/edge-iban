@@ -18,45 +18,65 @@
 
     </android.support.design.widget.AppBarLayout>
 
-    <RadioGroup xmlns:android="http://schemas.android.com/apk/res/android"
-        android:checkedButton="@+id/radio_edge"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <RadioButton android:id="@+id/radio_edge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Edge"
-            android:onClick="onRadioButtonClicked"/>
-
-        <RadioButton android:id="@+id/radio_cloud"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Cloud"
-            android:onClick="onRadioButtonClicked"/>
-
-    </RadioGroup>
-
     <TextView
         android:id="@+id/info_rx"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textStyle="italic" />
+        android:textStyle="italic"
+        android:gravity="center"
+        />
 
     <TextView
         android:id="@+id/info_tx"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textStyle="italic" />
+        android:textStyle="italic"
+        android:gravity="center"
+        />
 
     <TextView
         android:id="@+id/state"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="un-initiated"
+        android:gravity="center"
         />
 
+
+    <Button
+        android:id="@+id/buttonCloud"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connect to Cloud"
+        android:onClick="connectToCloud"/>
+
+    <Button
+        android:id="@+id/buttonEdge"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connect to Edge"
+        android:onClick="connectToEdge"/>
+
+    <Button
+        android:id="@+id/buttonBt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connect to Bt"
+        android:onClick="connectToBt"/>
+
+    <Button
+        android:id="@+id/buttonSendIban"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send to IBAN"
+        android:onClick="sendToIban"/>
+
+    <Button
+        android:id="@+id/buttonSendNet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send to Network"
+        android:onClick="sendToNetwork"/>/>
 
     <ScrollView
         android:id="@+id/scroller"
