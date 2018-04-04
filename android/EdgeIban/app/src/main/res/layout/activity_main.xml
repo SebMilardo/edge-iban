@@ -64,31 +64,4 @@
         android:text="Connect to Bt"
         android:onClick="connectToBt"/>
 
-    <Button
-        android:id="@+id/buttonSendIban"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Send to IBAN"
-        android:onClick="sendToIban"/>
-
-    <Button
-        android:id="@+id/buttonSendNet"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Send to Network"
-        android:onClick="sendToNetwork"/>/>
-
-    <ScrollView
-        android:id="@+id/scroller"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:scrollbars="vertical"
-        android:fillViewport="true">
-        <TextView
-            android:id="@+id/prompt"
-            android:layout_width="fill_parent"
-            android:layout_height="fill_parent"
-            android:layout_weight="1.0"/>
-    </ScrollView>
-
 </LinearLayout>

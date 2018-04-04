@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
             String action = intent.getAction();
             if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                 BluetoothDevice dev = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                Log.i(TAG, "Found device: "+ dev.getAddress());
+                Log.i(TAG, "Found device: " + dev.getAddress());
                 if (!btDevices.contains(dev)) {
                     btDevices.add(dev);
                     if (dev.getAddress().equals(ibanMac)) {
@@ -77,10 +77,12 @@ public class MainActivity extends AppCompatActivity {
     private RFCommThread rfCommThread;
     private TcpThread tcpThread;
     private SharedPreferences prefs;
+    private long startTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        startTime = System.nanoTime();
         btAdapter = BluetoothAdapter.getDefaultAdapter();
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
@@ -96,11 +98,9 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
         Log.e(TAG, "On Start...");
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        scrollView = findViewById(R.id.scroller);
         textViewInfoRx = findViewById(R.id.info_rx);
         textViewInfoTx = findViewById(R.id.info_tx);
         textViewState = findViewById(R.id.state);
-        textViewPrompt = findViewById(R.id.prompt);
         textViewInfoRx.setText(getIpAddressAndPortRx());
         textViewInfoTx.setText("Select a destination");
     }
@@ -113,7 +113,7 @@ public class MainActivity extends AppCompatActivity {
         textViewInfoRx.setText(getIpAddressAndPortRx());
 
         if (tcpThread == null && destAddress != null && destPort != 0) {
-            tcpThread = new TcpThread(destAddress,destPort);
+            tcpThread = new TcpThread(destAddress, destPort);
             tcpThread.start();
         }
 
@@ -163,17 +163,6 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> textViewState.setText(state));
     }
 
-    private void updatePrompt(final String prompt) {
-        runOnUiThread(() -> {
-            textViewPrompt.append(prompt);
-            scrollToBottom();
-        });
-    }
-
-    private void scrollToBottom() {
-        scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
-    }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_main, menu);
@@ -219,7 +208,9 @@ public class MainActivity extends AppCompatActivity {
         return ip;
     }
 
-    /** Called when the user touches the button */
+    /**
+     * Called when the user touches the button
+     */
     public void connectToCloud(View view) {
         destAddress = prefs.getString("cloud_address", "localhost");
         destPort = Integer.parseInt(prefs.getString("cloud_port", "4445"));
@@ -231,13 +222,15 @@ public class MainActivity extends AppCompatActivity {
             tcpThread = null;
         }
 
-        tcpThread = new TcpThread(destAddress,destPort);
+        tcpThread = new TcpThread(destAddress, destPort);
         tcpThread.start();
 
         updateState("Connected to Cloud");
     }
 
-    /** Called when the user touches the button */
+    /**
+     * Called when the user touches the button
+     */
     public void connectToEdge(View view) {
         destAddress = prefs.getString("edge_address", "localhost");
         destPort = Integer.parseInt(prefs.getString("edge_port", "4445"));
@@ -250,39 +243,29 @@ public class MainActivity extends AppCompatActivity {
             tcpThread = null;
         }
 
-        tcpThread = new TcpThread(destAddress,destPort);
+        tcpThread = new TcpThread(destAddress, destPort);
         tcpThread.start();
 
         updateState("Connected to Edge");
     }
 
-    /** Called when the user touches the button */
+    /**
+     * Called when the user touches the button
+     */
     public void connectToBt(View view) {
-        ibanMac = prefs.getString("iban_mac",ibanMacDefault).toUpperCase();
-        if (rfCommThread == null) {
-            BluetoothDevice dev = getDevice(ibanMac);
-            if (dev == null) {
-                btAdapter.startDiscovery();
-            } else {
-                rfCommThread = new RFCommThread(dev);
-                rfCommThread.start();
-            }
-        }
-    }
-
-    /** Called when the user touches the button */
-    public void sendToIban(View view) {
-        String data = Long.toString(System.nanoTime());
+        ibanMac = prefs.getString("iban_mac", ibanMacDefault).toUpperCase();
         if (rfCommThread != null) {
-            rfCommThread.write(data.getBytes(),data.length());
+            rfCommThread.interrupt();
+            rfCommThread.close();
+            rfCommThread = null;
         }
-    }
 
-    /** Called when the user touches the button */
-    public void sendToNetwork(View view) {
-        String data = Long.toString(System.nanoTime());
-        if (tcpThread != null){
-            tcpThread.write(data.getBytes(),data.length());
+        BluetoothDevice dev = getDevice(ibanMac);
+        if (dev == null) {
+            btAdapter.startDiscovery();
+        } else {
+            rfCommThread = new RFCommThread(dev);
+            rfCommThread.start();
         }
     }
 
@@ -326,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private abstract class comThread extends Thread{
+    private abstract class comThread extends Thread {
         InputStream is;
         OutputStream os;
         byte[] mmBuffer;
@@ -339,13 +322,13 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Running " + running);
         }
 
-        public void write(byte[] data, int len){
+        public void write(byte[] data, int len) {
             try {
                 if (os != null) {
                     os.write(data, 0, len);
                 }
             } catch (IOException e) {
-                Log.e(TAG,"Error: ", e);
+                Log.e(TAG, "Error: ", e);
             }
 
         }
@@ -373,7 +356,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     tmp = dev.createRfcommSocketToServiceRecord(uuid);
                 } catch (IOException e) {
-                    Log.e(TAG,"Null device");
+                    Log.e(TAG, "Null device");
                 }
             }
             socket = tmp;
@@ -382,31 +365,27 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             mmBuffer = new byte[1024];
-            int numBytes; // bytes returned from read()
+            int numBytes;
 
             running = true;
             btAdapter.cancelDiscovery();
 
             try {
-                ((BluetoothSocket)socket).connect();
+                ((BluetoothSocket) socket).connect();
                 MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to " + ibanMac, Toast.LENGTH_SHORT).show());
-                os = ((BluetoothSocket)socket).getOutputStream();
-                is = ((BluetoothSocket)socket).getInputStream();
+                os = ((BluetoothSocket) socket).getOutputStream();
+                is = ((BluetoothSocket) socket).getInputStream();
 
-                while (running){
+                while (running) {
                     numBytes = is.read(mmBuffer);
-                    long started =  Long.parseLong(new String(mmBuffer,0,numBytes));
-                    long arrived = System.nanoTime();
-                    updatePrompt("[BT]: " + ((arrived - started)/1000000000.0) + "s \n");
+                    tcpThread.write(mmBuffer, numBytes);
                 }
             } catch (Exception e) {
-                    Log.e(TAG, "Error:", e);
-                    close();
+                Log.e(TAG, "Error:", e);
+                close();
             }
         }
     }
-
-
 
 
     private class TcpThread extends comThread {
@@ -428,23 +407,16 @@ public class MainActivity extends AppCompatActivity {
                 InetAddress serverAddr = InetAddress.getByName(address);
                 socket = new Socket(serverAddr, port);
                 MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to " + destAddress, Toast.LENGTH_SHORT).show());
-                os = ((Socket)socket).getOutputStream();
-                is = ((Socket)socket).getInputStream();
+                os = ((Socket) socket).getOutputStream();
+                is = ((Socket) socket).getInputStream();
 
-                while (running){
+                while (running) {
                     numBytes = is.read(mmBuffer);
-                    long started =  Long.parseLong(new String(mmBuffer,0,numBytes));
-                    long arrived = System.nanoTime();
-                    updatePrompt("[IP]: " + ((arrived - started)/1000000000.0) + "s \n");
+                    rfCommThread.write(mmBuffer, numBytes);
                 }
             } catch (Exception e) {
-                try {
-                    Log.e(TAG, "Error", e);
-                    close();
-                } catch (Exception ex) {
-                    Log.e(TAG, "Could not close the client socket", ex);
-                }
-
+                Log.e(TAG, "Error:", e);
+                close();
             }
         }
     }
