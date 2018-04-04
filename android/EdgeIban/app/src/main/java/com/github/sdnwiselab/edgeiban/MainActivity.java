@@ -23,9 +23,11 @@ import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.DatagramPacket;
@@ -50,7 +52,6 @@ public class MainActivity extends AppCompatActivity {
     private final static String ibanMacDefault = "00:00:00:00:00:00";
     private static Set<BluetoothDevice> btDevices;
     private final static UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
-    TcpClient mTcpClient;
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
@@ -74,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
     private ScrollView scrollView;
 
     private RFCommThread rfCommThread;
+    private TcpThread tcpThread;
     private SharedPreferences prefs;
 
     @Override
@@ -106,11 +108,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        Log.e(TAG, "On Resume...");
         textViewInfoTx.setText(getIpAddressAndPortTx());
         textViewInfoRx.setText(getIpAddressAndPortRx());
 
-        if (mTcpClient != null) {
-            mTcpClient.stopClient();
+        if (tcpThread == null && destAddress != null && destPort != 0) {
+            tcpThread = new TcpThread(destAddress,destPort);
+            tcpThread.start();
         }
 
         if (rfCommThread == null) {
@@ -128,9 +132,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.e(TAG, "On Pause...");
-        if (mTcpClient != null) {
-            mTcpClient.stopClient();
+
+        if (tcpThread != null) {
+            tcpThread.interrupt();
+            tcpThread.close();
+            tcpThread = null;
         }
+
 
         if (rfCommThread != null) {
             rfCommThread.interrupt();
@@ -143,9 +151,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         super.onStop();
         Log.e(TAG, "On Stop...");
-        if (mTcpClient != null) {
-            mTcpClient.stopClient();
-        }
     }
 
     @Override
@@ -219,10 +224,16 @@ public class MainActivity extends AppCompatActivity {
         destAddress = prefs.getString("cloud_address", "localhost");
         destPort = Integer.parseInt(prefs.getString("cloud_port", "4445"));
         textViewInfoTx.setText(getIpAddressAndPortTx());
-        if (mTcpClient != null) {
-            mTcpClient.stopClient();
+
+        if (tcpThread != null) {
+            tcpThread.interrupt();
+            tcpThread.close();
+            tcpThread = null;
         }
-        new ConnectTask().execute("");
+
+        tcpThread = new TcpThread(destAddress,destPort);
+        tcpThread.start();
+
         updateState("Connected to Cloud");
     }
 
@@ -231,10 +242,17 @@ public class MainActivity extends AppCompatActivity {
         destAddress = prefs.getString("edge_address", "localhost");
         destPort = Integer.parseInt(prefs.getString("edge_port", "4445"));
         textViewInfoTx.setText(getIpAddressAndPortTx());
-        if (mTcpClient != null) {
-            mTcpClient.stopClient();
+
+
+        if (tcpThread != null) {
+            tcpThread.interrupt();
+            tcpThread.close();
+            tcpThread = null;
         }
-        new ConnectTask().execute("");
+
+        tcpThread = new TcpThread(destAddress,destPort);
+        tcpThread.start();
+
         updateState("Connected to Edge");
     }
 
@@ -254,16 +272,17 @@ public class MainActivity extends AppCompatActivity {
 
     /** Called when the user touches the button */
     public void sendToIban(View view) {
-        // Do something in response to button click
         String data = Long.toString(System.nanoTime());
-        rfCommThread.write(data.getBytes(),data.length());
+        if (rfCommThread != null) {
+            rfCommThread.write(data.getBytes(),data.length());
+        }
     }
 
     /** Called when the user touches the button */
     public void sendToNetwork(View view) {
-        // Do something in response to button click
-        if (mTcpClient != null) {
-            mTcpClient.sendMessage(Long.toString(System.nanoTime()));
+        String data = Long.toString(System.nanoTime());
+        if (tcpThread != null){
+            tcpThread.write(data.getBytes(),data.length());
         }
     }
 
@@ -275,7 +294,6 @@ public class MainActivity extends AppCompatActivity {
 
     private BluetoothDevice getDevice(String mac) {
         if (btDevices.size() > 0) {
-            // There are paired devices. Get the name and address of each paired device.
             for (BluetoothDevice device : btDevices) {
                 if (device.getAddress().equals(mac)) {
                     return device;
@@ -308,12 +326,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private class RFCommThread extends Thread {
-        private final BluetoothSocket socket;
-        private byte[] mmBuffer; // mmBuffer store for the stream
-
+    private abstract class comThread extends Thread{
+        InputStream is;
+        OutputStream os;
+        byte[] mmBuffer;
+        Closeable socket;
 
         boolean running;
+
+        public void setRunning(boolean running) {
+            this.running = running;
+            Log.e(TAG, "Running " + running);
+        }
+
+        public void write(byte[] data, int len){
+            try {
+                if (os != null) {
+                    os.write(data, 0, len);
+                }
+            } catch (IOException e) {
+                Log.e(TAG,"Error: ", e);
+            }
+
+        }
+
+        public void close() {
+            try {
+                if (socket != null) {
+                    socket.close();
+                }
+                is = null;
+                os = null;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+    }
+
+
+    private class RFCommThread extends comThread {
 
         public RFCommThread(BluetoothDevice dev) {
             BluetoothSocket tmp = null;
@@ -327,11 +379,6 @@ public class MainActivity extends AppCompatActivity {
             socket = tmp;
         }
 
-        public void setRunning(boolean running) {
-            this.running = running;
-            Log.e(TAG, "Running " + running);
-        }
-
         @Override
         public void run() {
             mmBuffer = new byte[1024];
@@ -341,61 +388,63 @@ public class MainActivity extends AppCompatActivity {
             btAdapter.cancelDiscovery();
 
             try {
-                socket.connect();
-                MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Conneted to " + ibanMac, Toast.LENGTH_SHORT).show());
+                ((BluetoothSocket)socket).connect();
+                MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to " + ibanMac, Toast.LENGTH_SHORT).show());
+                os = ((BluetoothSocket)socket).getOutputStream();
+                is = ((BluetoothSocket)socket).getInputStream();
 
-                InputStream is = socket.getInputStream();
-
-                while (true){
+                while (running){
                     numBytes = is.read(mmBuffer);
                     long started =  Long.parseLong(new String(mmBuffer,0,numBytes));
                     long arrived = System.nanoTime();
                     updatePrompt("[BT]: " + ((arrived - started)/1000000000.0) + "s \n");
                 }
             } catch (Exception e) {
-                try {
                     Log.e(TAG, "Error:", e);
-                    socket.close();
-                } catch (IOException ex) {
-                    Log.e(TAG, "Could not close the client socket", ex);
-                }
-
-            }
-        }
-
-        public void write(byte[] data, int len){
-            try {
-                socket.getOutputStream().write(data,0,len);
-            } catch (IOException e) {
-                Log.e(TAG,"Error: ", e);
-            }
-
-        }
-
-        public void close() {
-            try {
-                socket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+                    close();
             }
         }
     }
 
 
-    public class ConnectTask extends AsyncTask<String, String, TcpClient> {
 
-        @Override
-        protected TcpClient doInBackground(String... message) {
-            mTcpClient = new TcpClient(message1 -> {publishProgress(message1);},destAddress,destPort);
-            mTcpClient.run();
-            return null;
+
+    private class TcpThread extends comThread {
+        private String address;
+        private int port;
+
+        public TcpThread(String address, int port) {
+            this.address = address;
+            this.port = port;
         }
 
         @Override
-        protected void onProgressUpdate(String... values) {
-            super.onProgressUpdate(values);
-            if (values[0].length()>0){
-                updatePrompt("[IP]: " + values[0] + "s \n");
+        public void run() {
+            mmBuffer = new byte[1024];
+            int numBytes;
+
+            running = true;
+            try {
+                InetAddress serverAddr = InetAddress.getByName(address);
+                socket = new Socket(serverAddr, port);
+                MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to " + destAddress, Toast.LENGTH_SHORT).show());
+                os = ((Socket)socket).getOutputStream();
+                is = ((Socket)socket).getInputStream();
+
+                while (running){
+                    numBytes = is.read(mmBuffer);
+                    long started =  Long.parseLong(new String(mmBuffer,0,numBytes));
+                    long arrived = System.nanoTime();
+                    updatePrompt("[IP]: " + ((arrived - started)/1000000000.0) + "s \n");
+                }
+            } catch (Exception e) {
+                try {
+                    Log.e(TAG, "Error", e);
+                    close();
+                } catch (Exception ex) {
+                    Log.e(TAG, "Could not close the client socket", ex);
+                }
+
             }
         }
     }
