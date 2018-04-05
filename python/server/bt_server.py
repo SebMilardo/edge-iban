@@ -1,11 +1,12 @@
 # sudo sdptool add --channel=22 SP
 # hcitool dev
 
-import time
-import pandas as pd
 from bluetooth import *
-from matplotlib import pyplot as plt
-import numpy as np
+
+BUFFER_SIZE = 20
+UDP_IP = "127.0.0.1"
+UDP_PORT_RX = 5002
+UDP_PORT_TX = 5004
 
 server_sock = BluetoothSocket(RFCOMM)
 server_sock.bind(("", 22))
@@ -18,27 +19,24 @@ advertise_service(server_sock, "btServer",
                   service_id=uuid,
                   service_classes=[uuid, SERIAL_PORT_CLASS],
                   profiles=[SERIAL_PORT_PROFILE],
-                  #                   protocols = [ OBEX_UUID ]
                   )
 
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((UDP_IP, UDP_PORT_RX))
+
+print "UDP-BT Server:"
+print "Waiting for UDP packets on port %d" % UDP_PORT_RX
 print "Waiting for connection on RFCOMM channel %d" % port
 
 while True:
     delays = list()
     client_sock, client_info = server_sock.accept()
     print "Accepted connection from ", client_info
-    i = 0;
     try:
-        while i<1000:
-            i=i+1;
-	    client_sock.send(str(time.time()))
-            data = client_sock.recv(1024)
-            if len(data) == 0: break
-            delays.append(time.time() - float(data))
-        print "Done"
-        df = pd.DataFrame(delays)
-        df.to_csv("delays_%d.csv" % time.time())
-        df.plot.hist(bins=np.arange[0,1,0.005])
-        plt.show()
-    except IOError:
-	pass
+        while True:
+            data, addr = sock.recvfrom(BUFFER_SIZE)
+            client_sock.send(data)
+            data = client_sock.recv(BUFFER_SIZE)
+            sock.sendto(data, (UDP_IP, UDP_PORT_TX))
+    except:
+        pass
