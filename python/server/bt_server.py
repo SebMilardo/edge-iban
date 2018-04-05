@@ -4,6 +4,8 @@
 import time
 import pandas as pd
 from bluetooth import *
+from matplotlib import pyplot as plt
+import numpy as np
 
 server_sock = BluetoothSocket(RFCOMM)
 server_sock.bind(("", 22))
@@ -34,6 +36,9 @@ while True:
             if len(data) == 0: break
             delays.append(time.time() - float(data))
         print "Done"
-        pd.DataFrame(delays).to_csv("delays_%d.csv" % time.time())
+        df = pd.DataFrame(delays)
+        df.to_csv("delays_%d.csv" % time.time())
+        df.plot.hist(bins=np.arange[0,1,0.005])
+        plt.show()
     except IOError:
 	pass
