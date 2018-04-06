@@ -39,6 +39,7 @@ import java.net.SocketException;
 import java.util.Calendar;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.UUID;
 
@@ -270,6 +271,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    public void testLTE(View view) {
+        if (tcpThread != null) {
+            tcpThread.interrupt();
+            tcpThread.close();
+            tcpThread = null;
+        }
+
+        tcpThread = new TcpTestThread(destAddress, destPort);
+        tcpThread.start();
+    }
+
+
+    public void testBT(View view) {
+        if (rfCommThread != null) {
+            rfCommThread.interrupt();
+            rfCommThread.close();
+            rfCommThread = null;
+        }
+
+        BluetoothDevice dev = getDevice(ibanMac);
+        if (dev == null) {
+            btAdapter.startDiscovery();
+        } else {
+            rfCommThread = new RFCommTestThread(dev);
+            rfCommThread.start();
+        }
+    }
+
     private String getIpAddressAndPortTx() {
         return "Sending to: " + destAddress + ":" + destPort;
     }
@@ -389,8 +418,8 @@ public class MainActivity extends AppCompatActivity {
 
 
     private class TcpThread extends comThread {
-        private String address;
-        private int port;
+        String address;
+        int port;
 
         public TcpThread(String address, int port) {
             this.address = address;
@@ -420,4 +449,81 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+
+    private class RFCommTestThread extends RFCommThread {
+
+        public RFCommTestThread(BluetoothDevice dev) {
+            super(dev);
+        }
+
+        @Override
+        public void run() {
+            mmBuffer = new byte[1024];
+            int numBytes;
+
+            running = true;
+            btAdapter.cancelDiscovery();
+
+            try {
+                ((BluetoothSocket) socket).connect();
+                MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to " + ibanMac, Toast.LENGTH_SHORT).show());
+                os = ((BluetoothSocket) socket).getOutputStream();
+                is = ((BluetoothSocket) socket).getInputStream();
+
+                while (running) {
+                    numBytes = is.read(mmBuffer);
+                    rfCommThread.write(mmBuffer, numBytes);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error:", e);
+                close();
+            }
+        }
+    }
+
+
+    private class TcpTestThread extends TcpThread {
+
+        LinkedList<String> data = new LinkedList<>();
+
+        public TcpTestThread(String address, int port) {
+            super(address,port);
+        }
+
+        @Override
+        public void run() {
+            mmBuffer = new byte[1024];
+            int numBytes;
+            int i = 0;
+            running = true;
+            try {
+                InetAddress serverAddr = InetAddress.getByName(address);
+                socket = new Socket(serverAddr, port);
+                MainActivity.this.runOnUiThread(() -> Toast.makeText(MainActivity.this, "Connected to " + destAddress, Toast.LENGTH_SHORT).show());
+                os = ((Socket) socket).getOutputStream();
+                is = ((Socket) socket).getInputStream();
+
+                while (i<1000) {
+                    i = i +1;
+                    if (i % 100 == 0) {
+                        Log.e(TAG, "" +(i/10));
+                    }
+                    byte[] s = String.valueOf(System.nanoTime()).getBytes();
+                    os.write(s);
+                    numBytes = is.read(mmBuffer);
+                    long rx_l = System.nanoTime();
+                    String rx = new String(mmBuffer,0,numBytes);
+                    long tx_l = Long.parseLong(rx);
+                    data.add(String.valueOf(rx_l-tx_l));
+                }
+                Log.e(TAG,"Numero di misure: " + data.size());
+                for (String s : data)
+                    Log.e(TAG,s+",");
+            } catch (Exception e) {
+                Log.e(TAG, "Error:", e);
+                close();
+            }
+        }
+    }
+
 }
