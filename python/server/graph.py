@@ -51,7 +51,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("cloud.pdf")
+    plt.savefig("bt.pdf")
     plt.show()
 
     plt.figure()
