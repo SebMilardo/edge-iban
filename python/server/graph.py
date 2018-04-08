@@ -100,7 +100,6 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.figure(figsize=(5, 3))
     plt.savefig("total_edge.pdf", bbox_inches="tight")
     plt.show()
     pass
