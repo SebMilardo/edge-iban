@@ -1,9 +1,13 @@
 from matplotlib import pyplot as plt
+
+
+
 import numpy as np
 import pandas as pd
 
 
 def graph():
+    plt.figure(figsize=(5, 3))
     df_e = pd.read_csv("data/edge.txt", header=-1)
     df_e.reset_index(inplace=True)
     df_e.columns = ("a","b","c")
@@ -17,10 +21,10 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("edge.pdf")
+    plt.savefig("edge.pdf", bbox_inches="tight")
     plt.show()
 
-    plt.figure()
+    plt.figure(figsize=(5, 3))
     df_c = pd.read_csv("data/cloud.txt", header=-1)
     df_c.reset_index(inplace=True)
     df_c.columns = ("a","b","c")
@@ -34,10 +38,10 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("cloud.pdf")
+    plt.savefig("cloud.pdf", bbox_inches="tight")
     plt.show()
 
-    plt.figure()
+    plt.figure(figsize=(5, 3))
     df_b = pd.read_csv("data/bluetooth.txt", header=-1)
     df_b.reset_index(inplace=True)
     df_b.columns = ("a","b","c")
@@ -51,10 +55,10 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("bt.pdf")
+    plt.savefig("bt.pdf", bbox_inches="tight")
     plt.show()
 
-    plt.figure()
+    plt.figure(figsize=(5, 3))
     df_i = pd.read_csv("data/iban.txt", header=-1)
     df_i.reset_index(inplace=True)
     df_i.columns = ("a","b","c")
@@ -68,15 +72,14 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("iban.pdf")
+    plt.savefig("iban.pdf", bbox_inches="tight")
     plt.show()
 
     total_edge = (df_e + df_b + df_i)
 
     total_cloud = (df_c + df_b + df_i)
 
-
-    plt.figure()
+    plt.figure(figsize=(5, 3))
     ax = total_cloud.hist(bins=np.arange(0, 300), normed=True)
     ax.set_ylim([0,0.121])
     ax.set_xlim([50, 121])
@@ -85,11 +88,10 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("total_cloud.pdf")
+    plt.savefig("total_cloud.pdf", bbox_inches="tight")
     plt.show()
 
-
-    plt.figure()
+    plt.figure(figsize=(5, 3))
     ax = total_edge.hist(bins=np.arange(0, 300), normed=True)
     ax.set_ylim([0,0.121])
     ax.set_xlim([50, 121])
@@ -98,7 +100,8 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("total_edge.pdf")
+    plt.figure(figsize=(5, 3))
+    plt.savefig("total_edge.pdf", bbox_inches="tight")
     plt.show()
     pass
 
