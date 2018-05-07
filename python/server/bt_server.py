@@ -2,11 +2,12 @@
 # hcitool dev
 
 from bluetooth import *
+import socket
 
 BUFFER_SIZE = 20
 UDP_IP = "127.0.0.1"
 UDP_PORT_RX = 5002
-UDP_PORT_TX = 5004
+UDP_PORT_TX = 5000
 
 server_sock = BluetoothSocket(RFCOMM)
 server_sock.bind(("", 22))
