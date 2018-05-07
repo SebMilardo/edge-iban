@@ -21,7 +21,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("edge.pdf", bbox_inches="tight")
+    plt.savefig("gfx/edge.pdf", bbox_inches="tight")
     plt.show()
 
     plt.figure(figsize=(5, 2.5))
@@ -38,7 +38,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("cloud.pdf", bbox_inches="tight")
+    plt.savefig("gfx/cloud.pdf", bbox_inches="tight")
     plt.show()
 
     plt.figure(figsize=(5, 2.5))
@@ -55,7 +55,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("bt.pdf", bbox_inches="tight")
+    plt.savefig("gfx/bt.pdf", bbox_inches="tight")
     plt.show()
 
     plt.figure(figsize=(5, 2.5))
@@ -72,7 +72,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("iban.pdf", bbox_inches="tight")
+    plt.savefig("gfx/iban.pdf", bbox_inches="tight")
     plt.show()
 
     total_edge = (df_e + df_b + df_i)
@@ -88,7 +88,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("total_cloud.pdf", bbox_inches="tight")
+    plt.savefig("gfx/total_cloud.pdf", bbox_inches="tight")
     plt.show()
 
     plt.figure(figsize=(5, 2.5))
@@ -100,7 +100,7 @@ def graph():
     ax.grid(linestyle="dotted")
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("total_edge.pdf", bbox_inches="tight")
+    plt.savefig("gfx/total_edge.pdf", bbox_inches="tight")
     plt.show()
     pass
 
