@@ -8,38 +8,32 @@ import pandas as pd
 
 def graph():
     plt.figure(figsize=(5, 2.5))
+
     df_e = pd.read_csv("data/edge.txt", header=-1)
     df_e.reset_index(inplace=True)
     df_e.columns = ("a","b","c")
     df_e = df_e.b / 2000000
     df_e = df_e[:900]
-    ax = df_e.hist(bins=np.arange(0, 125), normed=True)
-    ax.set_ylim([0,0.40])
-    ax.set_xlim([0, 65])
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(linestyle="dotted")
-    plt.xlabel("Delay (ms)")
-    plt.ylabel("PDF")
-    plt.savefig("gfx/edge.pdf", bbox_inches="tight")
-    plt.show()
 
-    plt.figure(figsize=(5, 2.5))
     df_c = pd.read_csv("data/cloud.txt", header=-1)
     df_c.reset_index(inplace=True)
-    df_c.columns = ("a","b","c")
+    df_c.columns = ("a", "b", "c")
     df_c = df_c.b / 2000000
     df_c = df_c[:900]
-    ax = df_c.hist(bins=np.arange(0, 125), normed=True)
+
+    ax = df_c.hist(bins=np.arange(0, 125), normed=True, label="Core", alpha=0.8)
+    ax = df_e.hist(bins=np.arange(0, 125), normed=True, ax=ax, label="Edge", alpha=0.5)
     ax.set_ylim([0,0.40])
     ax.set_xlim([0, 65])
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.grid(linestyle="dotted")
+    plt.legend()
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("gfx/cloud.pdf", bbox_inches="tight")
+    plt.savefig("gfx/edge+cloud.pdf", bbox_inches="tight")
     plt.show()
+
 
     plt.figure(figsize=(5, 2.5))
     df_b = pd.read_csv("data/bluetooth.txt", header=-1)
@@ -80,30 +74,18 @@ def graph():
     total_cloud = (df_c + df_b + df_i)
 
     plt.figure(figsize=(5, 2.5))
-    ax = total_cloud.hist(bins=np.arange(0, 300), normed=True)
+    ax = total_cloud.hist(bins=np.arange(0, 300), normed=True, alpha=0.8, label="Core")
+    ax = total_edge.hist(bins=np.arange(0, 300), normed=True, alpha=0.5, ax=ax, label="Edge")
     ax.set_ylim([0,0.101])
     ax.set_xlim([50, 121])
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.grid(linestyle="dotted")
+    plt.legend()
     plt.xlabel("Delay (ms)")
     plt.ylabel("PDF")
-    plt.savefig("gfx/total_cloud.pdf", bbox_inches="tight")
+    plt.savefig("gfx/total_core+edge.pdf", bbox_inches="tight")
     plt.show()
-
-    plt.figure(figsize=(5, 2.5))
-    ax = total_edge.hist(bins=np.arange(0, 300), normed=True)
-    ax.set_ylim([0,0.101])
-    ax.set_xlim([50, 121])
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(linestyle="dotted")
-    plt.xlabel("Delay (ms)")
-    plt.ylabel("PDF")
-    plt.savefig("gfx/total_edge.pdf", bbox_inches="tight")
-    plt.show()
-    pass
-
 
 
 graph()
